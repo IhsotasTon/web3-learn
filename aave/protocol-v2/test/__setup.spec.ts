@@ -22,20 +22,11 @@ import {
   deployATokensAndRatesHelper,
   deployWETHGateway,
   deployWETHMocked,
-  deployMockUniswapRouter,
-  deployUniswapLiquiditySwapAdapter,
-  deployUniswapRepayAdapter,
-  deployFlashLiquidationAdapter,
 } from '../helpers/contracts-deployments';
 import { Signer } from 'ethers';
 import { TokenContractId, eContractid, tEthereumAddress, AavePools } from '../helpers/types';
 import { MintableERC20 } from '../types/MintableERC20';
-import {
-  ConfigNames,
-  getReservesConfigByPool,
-  getTreasuryAddress,
-  loadPoolConfig,
-} from '../helpers/configuration';
+import { ConfigNames, getReservesConfigByPool, getTreasuryAddress, loadPoolConfig } from '../helpers/configuration';
 import { initializeMakeSuite } from './helpers/make-suite';
 
 import {
@@ -44,7 +35,10 @@ import {
   setInitialMarketRatesInRatesOracleByHelper,
 } from '../helpers/oracles-helpers';
 import { DRE, waitForTx } from '../helpers/misc-utils';
-import { initReservesByHelper, configureReservesByHelper } from '../helpers/init-helpers';
+import {
+  initReservesByHelper,
+  configureReservesByHelper,
+} from '../helpers/init-helpers';
 import AaveConfig from '../markets/aave';
 import { ZERO_ADDRESS } from '../helpers/constants';
 import {
@@ -219,33 +213,21 @@ const buildTestEnv = async (deployer: Signer, secondaryWallet: Signer) => {
 
   const treasuryAddress = await getTreasuryAddress(config);
 
-  await initReservesByHelper(
+  await initReservesByHelper(reservesParams, allReservesAddresses, admin, treasuryAddress, ZERO_ADDRESS, false);
+  await configureReservesByHelper(
     reservesParams,
     allReservesAddresses,
-    admin,
-    treasuryAddress,
-    ZERO_ADDRESS,
-    false
+    testHelpers,
+    admin
   );
-  await configureReservesByHelper(reservesParams, allReservesAddresses, testHelpers, admin);
 
   const collateralManager = await deployLendingPoolCollateralManager();
   await waitForTx(
     await addressesProvider.setLendingPoolCollateralManager(collateralManager.address)
   );
-  await deployMockFlashLoanReceiver(addressesProvider.address);
 
-  const mockUniswapRouter = await deployMockUniswapRouter();
-
-  const adapterParams: [string, string, string] = [
-    addressesProvider.address,
-    mockUniswapRouter.address,
-    mockTokens.WETH.address,
-  ];
-
-  await deployUniswapLiquiditySwapAdapter(adapterParams);
-  await deployUniswapRepayAdapter(adapterParams);
-  await deployFlashLiquidationAdapter(adapterParams);
+  const mockFlashLoanReceiver = await deployMockFlashLoanReceiver(addressesProvider.address);
+  await insertContractAddressInDb(eContractid.MockFlashLoanReceiver, mockFlashLoanReceiver.address);
 
   await deployWalletBalancerProvider();
 

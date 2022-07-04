@@ -1,4 +1,4 @@
-import { Contract, Signer, utils, ethers, BigNumberish } from 'ethers';
+import { Contract, Signer, utils, ethers } from 'ethers';
 import { signTypedData_v4 } from 'eth-sig-util';
 import { fromRpcSig, ECDSASignature } from 'ethereumjs-util';
 import BigNumber from 'bignumber.js';
@@ -17,7 +17,6 @@ import { Artifact } from 'hardhat/types';
 import { Artifact as BuidlerArtifact } from '@nomiclabs/buidler/types';
 import { verifyContract } from './etherscan-verification';
 import { getIErc20Detailed } from './contracts-getters';
-import { usingTenderly } from './tenderly-utils';
 
 export type MockTokenMap = { [symbol: string]: MintableERC20 };
 
@@ -91,8 +90,7 @@ export const withSaveAndVerify = async <ContractType extends Contract>(
 ): Promise<ContractType> => {
   await waitForTx(instance.deployTransaction);
   await registerContractInJsonDb(id, instance);
-  if (usingTenderly()) {
-    console.log('doing verify of', id);
+  if (DRE.network.name.includes('tenderly')) {
     await (DRE as any).tenderlyRPC.verify({
       name: id,
       address: instance.address,
@@ -233,71 +231,4 @@ export const getSignatureFromTypedData = (
     data: typedData,
   });
   return fromRpcSig(signature);
-};
-
-export const buildLiquiditySwapParams = (
-  assetToSwapToList: tEthereumAddress[],
-  minAmountsToReceive: BigNumberish[],
-  swapAllBalances: BigNumberish[],
-  permitAmounts: BigNumberish[],
-  deadlines: BigNumberish[],
-  v: BigNumberish[],
-  r: (string | Buffer)[],
-  s: (string | Buffer)[],
-  useEthPath: boolean[]
-) => {
-  return ethers.utils.defaultAbiCoder.encode(
-    [
-      'address[]',
-      'uint256[]',
-      'bool[]',
-      'uint256[]',
-      'uint256[]',
-      'uint8[]',
-      'bytes32[]',
-      'bytes32[]',
-      'bool[]',
-    ],
-    [
-      assetToSwapToList,
-      minAmountsToReceive,
-      swapAllBalances,
-      permitAmounts,
-      deadlines,
-      v,
-      r,
-      s,
-      useEthPath,
-    ]
-  );
-};
-
-export const buildRepayAdapterParams = (
-  collateralAsset: tEthereumAddress,
-  collateralAmount: BigNumberish,
-  rateMode: BigNumberish,
-  permitAmount: BigNumberish,
-  deadline: BigNumberish,
-  v: BigNumberish,
-  r: string | Buffer,
-  s: string | Buffer,
-  useEthPath: boolean
-) => {
-  return ethers.utils.defaultAbiCoder.encode(
-    ['address', 'uint256', 'uint256', 'uint256', 'uint256', 'uint8', 'bytes32', 'bytes32', 'bool'],
-    [collateralAsset, collateralAmount, rateMode, permitAmount, deadline, v, r, s, useEthPath]
-  );
-};
-
-export const buildFlashLiquidationAdapterParams = (
-  collateralAsset: tEthereumAddress,
-  debtAsset: tEthereumAddress,
-  user: tEthereumAddress,
-  debtToCover: BigNumberish,
-  useEthPath: boolean
-) => {
-  return ethers.utils.defaultAbiCoder.encode(
-    ['address', 'address', 'address', 'uint256', 'bool'],
-    [collateralAsset, debtAsset, user, debtToCover, useEthPath]
-  );
 };

@@ -996,7 +996,7 @@ export const calcExpectedReserveDataAfterStableRateRebalance = (
 
   //removing the stable liquidity at the old rate
 
-  const avgRateBefore = calcExpectedAverageStableBorrowRateRebalance(
+  const avgRateBefore = calcExpectedAverageStableBorrowRate(
     reserveDataBeforeAction.averageStableBorrowRate,
     expectedReserveData.totalStableDebt,
     userStableDebt.negated(),
@@ -1004,7 +1004,7 @@ export const calcExpectedReserveDataAfterStableRateRebalance = (
   );
   // adding it again at the new rate
 
-  expectedReserveData.averageStableBorrowRate = calcExpectedAverageStableBorrowRateRebalance(
+  expectedReserveData.averageStableBorrowRate = calcExpectedAverageStableBorrowRate(
     avgRateBefore,
     expectedReserveData.totalStableDebt.minus(userStableDebt),
     userStableDebt,
@@ -1044,8 +1044,6 @@ export const calcExpectedUserDataAfterStableRateRebalance = (
 ): UserReserveData => {
   const expectedUserData = { ...userDataBeforeAction };
 
-  expectedUserData.principalStableDebt = userDataBeforeAction.principalStableDebt;
-
   expectedUserData.principalVariableDebt = calcExpectedVariableDebtTokenBalance(
     reserveDataBeforeAction,
     userDataBeforeAction,
@@ -1058,18 +1056,12 @@ export const calcExpectedUserDataAfterStableRateRebalance = (
     txTimestamp
   );
 
-  expectedUserData.currentVariableDebt = calcExpectedVariableDebtTokenBalance(
-    reserveDataBeforeAction,
-    userDataBeforeAction,
-    txTimestamp
-  );
-
   expectedUserData.stableRateLastUpdated = txTimestamp;
 
   expectedUserData.principalVariableDebt = userDataBeforeAction.principalVariableDebt;
 
-  // Stable rate after burn
-  expectedUserData.stableBorrowRate = expectedDataAfterAction.averageStableBorrowRate;
+  expectedUserData.stableBorrowRate = reserveDataBeforeAction.stableBorrowRate;
+
   expectedUserData.liquidityRate = expectedDataAfterAction.liquidityRate;
 
   expectedUserData.currentATokenBalance = calcExpectedATokenBalance(
@@ -1112,31 +1104,13 @@ const calcExpectedAverageStableBorrowRate = (
 ) => {
   const weightedTotalBorrows = avgStableRateBefore.multipliedBy(totalStableDebtBefore);
   const weightedAmountBorrowed = rate.multipliedBy(amountChanged);
-  const totalBorrowedStable = totalStableDebtBefore.plus(amountChanged);
+  const totalBorrowedStable = totalStableDebtBefore.plus(new BigNumber(amountChanged));
 
   if (totalBorrowedStable.eq(0)) return new BigNumber('0');
 
   return weightedTotalBorrows
     .plus(weightedAmountBorrowed)
     .div(totalBorrowedStable)
-    .decimalPlaces(0, BigNumber.ROUND_DOWN);
-};
-
-const calcExpectedAverageStableBorrowRateRebalance = (
-  avgStableRateBefore: BigNumber,
-  totalStableDebtBefore: BigNumber,
-  amountChanged: BigNumber,
-  rate: BigNumber
-) => {
-  const weightedTotalBorrows = avgStableRateBefore.rayMul(totalStableDebtBefore);
-  const weightedAmountBorrowed = rate.rayMul(amountChanged.wadToRay());
-  const totalBorrowedStable = totalStableDebtBefore.plus(amountChanged.wadToRay());
-
-  if (totalBorrowedStable.eq(0)) return new BigNumber('0');
-
-  return weightedTotalBorrows
-    .plus(weightedAmountBorrowed)
-    .rayDiv(totalBorrowedStable)
     .decimalPlaces(0, BigNumber.ROUND_DOWN);
 };
 
@@ -1236,6 +1210,7 @@ export const calcExpectedInterestRates = (
   averageStableBorrowRate: BigNumber
 ): BigNumber[] => {
   const { reservesParams } = configuration;
+
 
   const reserveIndex = Object.keys(reservesParams).findIndex((value) => value === reserveSymbol);
   const [, reserveConfiguration] = (Object.entries(reservesParams) as [string, IReserveParams][])[

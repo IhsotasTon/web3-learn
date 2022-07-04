@@ -1,14 +1,14 @@
 ```
-        .///.                .///.     //.            .//  `/////////////-
-       `++:++`              .++:++`    :++`          `++:  `++:......---.`
-      `/+: -+/`            `++- :+/`    /+/         `/+/   `++.
-      /+/   :+/            /+:   /+/    `/+/        /+/`   `++.
-  -::/++::`  /+:       -::/++::` `/+:    `++:      :++`    `++/:::::::::.
-  -:+++::-`  `/+:      --++/---`  `++-    .++-    -++.     `++/:::::::::.
-   -++.       .++-      -++`       .++.    .++.  .++-      `++.
-  .++-         -++.    .++.         -++.    -++``++-       `++.
- `++:           :++`  .++-           :++`    :+//+:        `++:----------`
- -/:             :/-  -/:             :/.     ://:         `/////////////-
+        .///.                .///.     //.            .//  `/////////////- 
+       `++:++`              .++:++`    :++`          `++:  `++:......---.` 
+      `/+: -+/`            `++- :+/`    /+/         `/+/   `++.            
+      /+/   :+/            /+:   /+/    `/+/        /+/`   `++.            
+  -::/++::`  /+:       -::/++::` `/+:    `++:      :++`    `++/:::::::::.  
+  -:+++::-`  `/+:      --++/---`  `++-    .++-    -++.     `++/:::::::::.  
+   -++.       .++-      -++`       .++.    .++.  .++-      `++.            
+  .++-         -++.    .++.         -++.    -++``++-       `++.            
+ `++:           :++`  .++-           :++`    :+//+:        `++:----------` 
+ -/:             :/-  -/:             :/.     ://:         `/////////////- 
 ```
 
 # Aave Protocol v2
@@ -21,55 +21,13 @@ Aave is a decentralized non-custodial liquidity markets protocol where users can
 
 ## Documentation
 
-The documentation of Aave V2 is in the following [Aave V2 documentation](https://docs.aave.com/developers/v/2.0/) link. At the documentation you can learn more about the protocol, see the contract interfaces, integration guides and audits.
+The documentation of Aave V2 is in the following [Aave V2 documentation](https://docs.aave.com/v2/-MJXUluJ2u1DiL-VU6MM) link. At the documentation you can learn more about the protocol, see the contract interfaces, integration guides and audits.
 
-For getting the latest contracts addresses, please check the [Deployed contracts](https://docs.aave.com/developers/v/2.0/deployed-contracts/deployed-contracts) page at the documentation to stay up to date.
-
-A more detailed and technical description of the protocol can be found in this repository, [here](./aave-v2-whitepaper.pdf)
-
-## Audits
-
-- MixBytes (16/09/2020 - 03/12/2020): [report](./audits/Mixbytes-aave-v2-03-12-2020.pdf)
-- PeckShield (29/09/2020 - 03/12/2020) : [report](./audits/Peckshield-aave-v2-03-12-2020-EN.pdf) (Also available in Chinese in the same folder)
-- CertiK (28/09/2020 - 02/12/2020): [report](./audits/Certik-aave-v2-03-12-2020.pdf)
-- Consensys Diligence (09/09/2020 - 09/10/2020): [report](https://consensys.net/diligence/audits/2020/09/aave-protocol-v2/)
-- Certora, formal verification (02/08/2020 - 29/10/2020): [report](./audits/Certora-FV-aave-v2-03-12-2020.pdf)
-- SigmaPrime (January 2021): [report](./audits/SigmaPrime-aave-v2-01-2021.pdf)
+For getting the latest contracts addresses, please check the [Deployed contracts](https://docs.aave.com/developers/deployed-contracts) page at the documentation to stay up to date.
 
 ## Connect with the community
 
-You can join at the [Discord](http://aave.com/discord) channel or at the [Governance Forum](https://governance.aave.com/) for asking questions about the protocol or talk about Aave with other peers.
-
-## Getting Started
-
-You can install `@aave/protocol-v2` as an NPM package in your Hardhat, Buidler or Truffle project to import the contracts and interfaces:
-
-`npm install @aave/protocol-v2`
-
-Import at Solidity files:
-
-```
-import {ILendingPool} from "@aave/protocol-v2/contracts/interfaces/ILendingPool.sol";
-
-contract Misc {
-
-  function deposit(address pool, address token, address user, uint256 amount) {
-    ILendingPool(pool).deposit(token, amount, user, '0');
-    {...}
-  }
-}
-```
-
-The JSON artifacts with the ABI and Bytecode are also included into the bundled NPM package at `artifacts/` directory.
-
-Import JSON file via Node JS `require`:
-
-```
-const LendingPoolV2Artifact = require('@aave/protocol-v2/artifacts/contracts/protocol/lendingpool/LendingPool.sol/LendingPool.json');
-
-// Log the ABI into console
-console.log(LendingPoolV2Artifact.abi)
-```
+You can join at the [Discord](https://discord.com/invite/CJm5Jt3) channel or at the [Governance Forum](https://governance.aave.com/) for asking questions about the protocol or talk about Aave with other peers.
 
 ## Setup
 
@@ -138,87 +96,41 @@ npm run aave:kovan:full:migration
 
 ### Mainnet fork deployment
 
-You can deploy Aave Protocol v2 in a forked Mainnet chain using Hardhat built-in fork feature:
+You can deploy Aave Protocol v2 in a forked Mainnet chain using Hardhat built-in feature:
 
 ```
-docker-compose run contracts-env npm run aave:fork:main
-```
+# In one terminal, run a hardhat note with mainnet fork enabled
+MAINNET_FORK=true npx hardhat node
 
-### Deploy Aave into a Mainnet Fork via console
+# In another terminal, run docker-compose
+docker-compose up
 
-You can deploy Aave into the Hardhat console in fork mode, to interact with the protocol inside the fork or for testing purposes.
+# Open another tab or terminal
+docker-compose exec contracts-env bash
 
-Run the console in Mainnet fork mode:
+# A new Bash terminal is prompted, connected to the container
+npm run aave:fork:main
 
-```
-docker-compose run contracts-env npm run console:fork
-```
+# Contracts are now deployed at Hardhat node with Mainnet fork.
 
-At the Hardhat console, interact with the Aave protocol in Mainnet fork mode:
-
-```
-// Deploy the Aave protocol in fork mode
-await run('aave:mainnet')
-
-// Or your custom Hardhat task
-await run('your-custom-task');
-
-// After you initialize the HRE via 'set-DRE' task, you can import any TS/JS file
-run('set-DRE');
-
-// Import contract getters to retrieve an Ethers.js Contract instance
-const contractGetters = require('./helpers/contracts-getters'); // Import a TS/JS file
-
-// Lending pool instance
-const lendingPool = await contractGetters.getLendingPool("LendingPool address from 'aave:mainnet' task");
-
-// You can impersonate any Ethereum address
-await network.provider.request({ method: "hardhat_impersonateAccount",  params: ["0xb1adceddb2941033a090dd166a462fe1c2029484"]});
-
-const signer = await ethers.provider.getSigner("0xb1adceddb2941033a090dd166a462fe1c2029484")
-
-// ERC20 token DAI Mainnet instance
-const DAI = await contractGetters.getIErc20Detailed("0x6B175474E89094C44Da98b954EedeAC495271d0F");
-
-// Approve 100 DAI to LendingPool address
-await DAI.connect(signer).approve(lendingPool.address, ethers.utils.parseUnits('100'));
-
-// Deposit 100 DAI
-await lendingPool.connect(signer).deposit(DAI.address, ethers.utils.parseUnits('100'), await signer.getAddress(), '0');
+# You can interact with them via Hardhat console
+MAINNET_FORK=true npx hardhat console
+# Or your custom Hardhat task
+MAINNET_FORK=true npx hardhat your-custom-task
 
 ```
 
-## Interact with Aave in Mainnet via console
+### Mainnet fork - Run the check list
 
-You can interact with Aave at Mainnet network using the Hardhat console, in the scenario where the frontend is down or you want to interact directly. You can check the deployed addresses at https://docs.aave.com/developers/deployed-contracts.
-
-Run the Hardhat console pointing to the Mainnet network:
+For testing the deployment scripts for Mainnet release, you can run the check-list tests in a Mainnet fork using Hardhat built-in feature:
 
 ```
-docker-compose run contracts-env npx hardhat --network main console
-```
+# In another terminal, run docker-compose
+docker-compose up
 
-At the Hardhat console, you can interact with the protocol:
+# Open another tab or terminal
+docker-compose exec contracts-env bash
 
-```
-// Load the HRE into helpers to access signers
-run("set-DRE")
-
-// Import getters to instance any Aave contract
-const contractGetters = require('./helpers/contracts-getters');
-
-// Load the first signer
-const signer = await contractGetters.getFirstSigner();
-
-// Lending pool instance
-const lendingPool = await contractGetters.getLendingPool("0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9");
-
-// ERC20 token DAI Mainnet instance
-const DAI = await contractGetters.getIErc20Detailed("0x6B175474E89094C44Da98b954EedeAC495271d0F");
-
-// Approve 100 DAI to LendingPool address
-await DAI.connect(signer).approve(lendingPool.address, ethers.utils.parseUnits('100'));
-
-// Deposit 100 DAI
-await lendingPool.connect(signer).deposit(DAI.address, ethers.utils.parseUnits('100'), await signer.getAddress(), '0');
+# A new Bash terminal is prompted, connected to the container
+npm run test:main:check-list
 ```
