@@ -16,6 +16,7 @@ import {IGovernancePowerDelegationToken} from '../interfaces/IGovernancePowerDel
  * - getVotingPowerAt: fetching a user Voting Power at a specified block
  * @author Aave
  **/
+//计算用户的提案或者投票的权利值
 contract GovernanceStrategy is IGovernanceStrategy {
   address public immutable AAVE;
   address public immutable STK_AAVE;
@@ -44,7 +45,7 @@ contract GovernanceStrategy is IGovernanceStrategy {
   }
 
   /**
-   * @dev Returns the total supply of Outstanding Voting Tokens 
+   * @dev Returns the total supply of Outstanding Voting Tokens
    * @param blockNumber Blocknumber at which to evaluate
    * @return total supply at blockNumber
    **/
@@ -65,7 +66,11 @@ contract GovernanceStrategy is IGovernanceStrategy {
     returns (uint256)
   {
     return
-      _getPowerByTypeAt(user, blockNumber, IGovernancePowerDelegationToken.DelegationType.PROPOSITION_POWER);
+      _getPowerByTypeAt(
+        user,
+        blockNumber,
+        IGovernancePowerDelegationToken.DelegationType.PROPOSITION_POWER
+      );
   }
 
   /**
@@ -80,7 +85,12 @@ contract GovernanceStrategy is IGovernanceStrategy {
     override
     returns (uint256)
   {
-    return _getPowerByTypeAt(user, blockNumber, IGovernancePowerDelegationToken.DelegationType.VOTING_POWER);
+    return
+      _getPowerByTypeAt(
+        user,
+        blockNumber,
+        IGovernancePowerDelegationToken.DelegationType.VOTING_POWER
+      );
   }
 
   function _getPowerByTypeAt(

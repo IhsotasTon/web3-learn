@@ -120,12 +120,13 @@ contract LendingPool is VersionedInitializable, ILendingPool, LendingPoolStorage
     IERC20(asset).safeTransferFrom(msg.sender, aToken, amount);
 
     bool isFirstDeposit = IAToken(aToken).mint(onBehalfOf, amount, reserve.liquidityIndex);
-
+    //isFirstDeposit为true则设置该用户有这个抵押资产
+    //之后如果全部withdraw出，则设置为false
     if (isFirstDeposit) {
       _usersConfig[onBehalfOf].setUsingAsCollateral(reserve.id, true);
       emit ReserveUsedAsCollateralEnabled(asset, onBehalfOf);
     }
-
+    //
     emit Deposit(asset, msg.sender, onBehalfOf, amount, referralCode);
   }
 
@@ -144,7 +145,7 @@ contract LendingPool is VersionedInitializable, ILendingPool, LendingPoolStorage
     address asset,
     uint256 amount,
     address to
-  ) external override whenNotPaused  returns (uint256) {
+  ) external override whenNotPaused returns (uint256) {
     DataTypes.ReserveData storage reserve = _reserves[asset];
 
     address aToken = reserve.aTokenAddress;
@@ -255,8 +256,9 @@ contract LendingPool is VersionedInitializable, ILendingPool, LendingPoolStorage
       variableDebt
     );
 
-    uint256 paybackAmount =
-      interestRateMode == DataTypes.InterestRateMode.STABLE ? stableDebt : variableDebt;
+    uint256 paybackAmount = interestRateMode == DataTypes.InterestRateMode.STABLE
+      ? stableDebt
+      : variableDebt;
 
     if (amount < paybackAmount) {
       paybackAmount = amount;
@@ -431,17 +433,16 @@ contract LendingPool is VersionedInitializable, ILendingPool, LendingPoolStorage
     address collateralManager = _addressesProvider.getLendingPoolCollateralManager();
 
     //solium-disable-next-line
-    (bool success, bytes memory result) =
-      collateralManager.delegatecall(
-        abi.encodeWithSignature(
-          'liquidationCall(address,address,address,uint256,bool)',
-          collateralAsset,
-          debtAsset,
-          user,
-          debtToCover,
-          receiveAToken
-        )
-      );
+    (bool success, bytes memory result) = collateralManager.delegatecall(
+      abi.encodeWithSignature(
+        'liquidationCall(address,address,address,uint256,bool)',
+        collateralAsset,
+        debtAsset,
+        user,
+        debtToCover,
+        receiveAToken
+      )
+    );
     require(success, Errors.LP_LIQUIDATION_CALL_FAILED);
 
     (uint256 returnCode, string memory returnMessage) = abi.decode(result, (uint256, string));
@@ -835,10 +836,9 @@ contract LendingPool is VersionedInitializable, ILendingPool, LendingPoolStorage
 
     address oracle = _addressesProvider.getPriceOracle();
 
-    uint256 amountInETH =
-      IPriceOracleGetter(oracle).getAssetPrice(vars.asset).mul(vars.amount).div(
-        10**reserve.configuration.getDecimals()
-      );
+    uint256 amountInETH = IPriceOracleGetter(oracle).getAssetPrice(vars.asset).mul(vars.amount).div(
+      10**reserve.configuration.getDecimals()
+    );
 
     ValidationLogic.validateBorrow(
       vars.asset,
