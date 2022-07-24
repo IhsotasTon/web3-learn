@@ -25,44 +25,67 @@ pragma solidity >=0.5.12;
 
 contract Vat {
     // --- Auth ---
-    mapping (address => uint) public wards;
-    function rely(address usr) external auth { require(live == 1, "Vat/not-live"); wards[usr] = 1; }
-    function deny(address usr) external auth { require(live == 1, "Vat/not-live"); wards[usr] = 0; }
-    modifier auth {
+    mapping(address => uint256) public wards;
+
+    function rely(address usr) external auth {
+        require(live == 1, "Vat/not-live");
+        wards[usr] = 1;
+    }
+
+    function deny(address usr) external auth {
+        require(live == 1, "Vat/not-live");
+        wards[usr] = 0;
+    }
+
+    modifier auth() {
         require(wards[msg.sender] == 1, "Vat/not-authorized");
         _;
     }
 
-    mapping(address => mapping (address => uint)) public can;
-    function hope(address usr) external { can[msg.sender][usr] = 1; }
-    function nope(address usr) external { can[msg.sender][usr] = 0; }
+    mapping(address => mapping(address => uint256)) public can;
+
+    function hope(address usr) external {
+        can[msg.sender][usr] = 1;
+    }
+
+    function nope(address usr) external {
+        can[msg.sender][usr] = 0;
+    }
+
     function wish(address bit, address usr) internal view returns (bool) {
         return either(bit == usr, can[bit][usr] == 1);
     }
 
     // --- Data ---
+    //每种抵押资产的汇总信息
     struct Ilk {
-        uint256 Art;   // Total Normalised Debt     [wad]
-        uint256 rate;  // Accumulated Rates         [ray]
-        uint256 spot;  // Price with Safety Margin  [ray]
-        uint256 line;  // Debt Ceiling              [rad]
-        uint256 dust;  // Urn Debt Floor            [rad]
+        uint256 Art; // 该资产总共的债务     [wad]
+        uint256 rate; // dai的累积费率         [ray]
+        uint256 spot; // 每单位抵押品允许借出的最大dai  [ray]
+        uint256 line; // 该抵押品的债务上限             [rad]
+        uint256 dust; // 该抵押品的债务下限            [rad]
     }
+    //某个特定的vault，抵押了多少，借了多少dai，对于每个特定抵押类型的一个特定的用户而言
     struct Urn {
-        uint256 ink;   // Locked Collateral  [wad]
-        uint256 art;   // Normalised Debt    [wad]
+        uint256 ink; // 质押的抵押品量，注意和gem的余额加起来是用户的抵押品总余额  [wad]
+        uint256 art; // Normalised Debt    [wad]
     }
 
-    mapping (bytes32 => Ilk)                       public ilks;
-    mapping (bytes32 => mapping (address => Urn )) public urns;
-    mapping (bytes32 => mapping (address => uint)) public gem;  // [wad]
-    mapping (address => uint256)                   public dai;  // [rad]
-    mapping (address => uint256)                   public sin;  // [rad]
+    mapping(bytes32 => Ilk) public ilks;
+    mapping(bytes32 => mapping(address => Urn)) public urns;
+    //vat中记录的各种抵押资产的余额
+    mapping(bytes32 => mapping(address => uint256)) public gem; // [wad]
+    //vat.dai的余额
+    mapping(address => uint256) public dai; // [rad]
+    //系统债务某用户无抵押生成dai的总额
+    mapping(address => uint256) public sin; // [rad]
 
-    uint256 public debt;  // Total Dai Issued    [rad]
-    uint256 public vice;  // Total Unbacked Dai  [rad]
-    uint256 public Line;  // Total Debt Ceiling  [rad]
-    uint256 public live;  // Active Flag
+    uint256 public debt; // Total Dai Issued    [rad]
+    uint256 public vice; // Total Unbacked Dai  [rad]
+    //总债务上限
+    uint256 public Line; // Total Debt Ceiling  [rad]
+    //合约是否可用
+    uint256 public live; // Active Flag
 
     // --- Init ---
     constructor() public {
@@ -71,76 +94,120 @@ contract Vat {
     }
 
     // --- Math ---
-    function add(uint x, int y) internal pure returns (uint z) {
-        z = x + uint(y);
+    function add(uint256 x, int256 y) internal pure returns (uint256 z) {
+        z = x + uint256(y);
         require(y >= 0 || z <= x);
         require(y <= 0 || z >= x);
     }
-    function sub(uint x, int y) internal pure returns (uint z) {
-        z = x - uint(y);
+
+    function sub(uint256 x, int256 y) internal pure returns (uint256 z) {
+        z = x - uint256(y);
         require(y <= 0 || z <= x);
         require(y >= 0 || z >= x);
     }
-    function mul(uint x, int y) internal pure returns (int z) {
-        z = int(x) * y;
-        require(int(x) >= 0);
-        require(y == 0 || z / y == int(x));
+
+    function mul(uint256 x, int256 y) internal pure returns (int256 z) {
+        z = int256(x) * y;
+        require(int256(x) >= 0);
+        require(y == 0 || z / y == int256(x));
     }
-    function add(uint x, uint y) internal pure returns (uint z) {
+
+    function add(uint256 x, uint256 y) internal pure returns (uint256 z) {
         require((z = x + y) >= x);
     }
-    function sub(uint x, uint y) internal pure returns (uint z) {
+
+    function sub(uint256 x, uint256 y) internal pure returns (uint256 z) {
         require((z = x - y) <= x);
     }
-    function mul(uint x, uint y) internal pure returns (uint z) {
+
+    function mul(uint256 x, uint256 y) internal pure returns (uint256 z) {
         require(y == 0 || (z = x * y) / y == x);
     }
 
     // --- Administration ---
+    //添加一个新的抵押类型
     function init(bytes32 ilk) external auth {
         require(ilks[ilk].rate == 0, "Vat/ilk-already-init");
-        ilks[ilk].rate = 10 ** 27;
+        ilks[ilk].rate = 10**27;
     }
-    function file(bytes32 what, uint data) external auth {
+
+    function file(bytes32 what, uint256 data) external auth {
         require(live == 1, "Vat/not-live");
         if (what == "Line") Line = data;
         else revert("Vat/file-unrecognized-param");
     }
-    function file(bytes32 ilk, bytes32 what, uint data) external auth {
+
+    function file(
+        bytes32 ilk,
+        bytes32 what,
+        uint256 data
+    ) external auth {
         require(live == 1, "Vat/not-live");
         if (what == "spot") ilks[ilk].spot = data;
         else if (what == "line") ilks[ilk].line = data;
         else if (what == "dust") ilks[ilk].dust = data;
         else revert("Vat/file-unrecognized-param");
     }
+
     function cage() external auth {
         live = 0;
     }
 
     // --- Fungibility ---
-    function slip(bytes32 ilk, address usr, int256 wad) external auth {
+    //减少某个用户的抵押品余额,slip
+    function slip(
+        bytes32 ilk,
+        address usr,
+        int256 wad
+    ) external auth {
         gem[ilk][usr] = add(gem[ilk][usr], wad);
     }
-    function flux(bytes32 ilk, address src, address dst, uint256 wad) external {
+
+    //将抵押品发送给别人
+    function flux(
+        bytes32 ilk,
+        address src,
+        address dst,
+        uint256 wad
+    ) external {
         require(wish(src, msg.sender), "Vat/not-allowed");
         gem[ilk][src] = sub(gem[ilk][src], wad);
         gem[ilk][dst] = add(gem[ilk][dst], wad);
     }
-    function move(address src, address dst, uint256 rad) external {
+
+    //将vat.dai发送给别人
+    function move(
+        address src,
+        address dst,
+        uint256 rad
+    ) external {
         require(wish(src, msg.sender), "Vat/not-allowed");
         dai[src] = sub(dai[src], rad);
         dai[dst] = add(dai[dst], rad);
     }
 
     function either(bool x, bool y) internal pure returns (bool z) {
-        assembly{ z := or(x, y)}
+        assembly {
+            z := or(x, y)
+        }
     }
+
     function both(bool x, bool y) internal pure returns (bool z) {
-        assembly{ z := and(x, y)}
+        assembly {
+            z := and(x, y)
+        }
     }
 
     // --- CDP Manipulation ---
-    function frob(bytes32 i, address u, address v, address w, int dink, int dart) external {
+    //
+    function frob(
+        bytes32 i, //抵押资产类型
+        address u, //user
+        address v, //抵押物的来源地址(dink为负值则需要approve)
+        address w, //借出还入dai的地址
+        int256 dink, //抵押资产的改变量 >0是增加抵押量,gem余额减少，但用户lock的抵押品增加
+        int256 dart //dai的改变量 >0是增加债务
+    ) external {
         // system is live
         require(live == 1, "Vat/not-live");
 
@@ -153,33 +220,53 @@ contract Vat {
         urn.art = add(urn.art, dart);
         ilk.Art = add(ilk.Art, dart);
 
-        int dtab = mul(ilk.rate, dart);
-        uint tab = mul(ilk.rate, urn.art);
-        debt     = add(debt, dtab);
+        int256 dtab = mul(ilk.rate, dart);
+        uint256 tab = mul(ilk.rate, urn.art);
+        debt = add(debt, dtab);
 
-        // either debt has decreased, or debt ceilings are not exceeded
-        require(either(dart <= 0, both(mul(ilk.Art, ilk.rate) <= ilk.line, debt <= Line)), "Vat/ceiling-exceeded");
-        // urn is either less risky than before, or it is safe
-        require(either(both(dart <= 0, dink >= 0), tab <= mul(urn.ink, ilk.spot)), "Vat/not-safe");
+        // 如dart>0即需要继续生成dai，则一定不能超过债务上限
+        require(
+            either(
+                dart <= 0,
+                both(mul(ilk.Art, ilk.rate) <= ilk.line, debt <= Line)
+            ),
+            "Vat/ceiling-exceeded"
+        );
+        //但凡增加v抵押品减少u的抵押lock量即或者用u的抵押增加w的dai，那么单个u的valut总债务应该小于上限，不得小于抵押率
+        require(
+            either(both(dart <= 0, dink >= 0), tab <= mul(urn.ink, ilk.spot)),
+            "Vat/not-safe"
+        );
 
-        // urn is either more safe, or the owner consents
-        require(either(both(dart <= 0, dink >= 0), wish(u, msg.sender)), "Vat/not-allowed-u");
-        // collateral src consents
+        // 但凡增加v抵押品减少u的抵押lock量即或者增加w的dai，那么u就应该授权给msg.sender
+        require(
+            either(both(dart <= 0, dink >= 0), wish(u, msg.sender)),
+            "Vat/not-allowed-u"
+        );
+        // 抵押品的来源地址 减少v的gem，即增加u的抵押量，
         require(either(dink <= 0, wish(v, msg.sender)), "Vat/not-allowed-v");
-        // debt dst consents
+        // 如果是减少w的可用dai即消除u的债务
         require(either(dart >= 0, wish(w, msg.sender)), "Vat/not-allowed-w");
 
         // urn has no debt, or a non-dusty amount
         require(either(urn.art == 0, tab >= ilk.dust), "Vat/dust");
-
+        //dink>0,用户自由的gem余额减少，但锁定urn.ink的增加
         gem[i][v] = sub(gem[i][v], dink);
-        dai[w]    = add(dai[w],    dtab);
+        //dart>0 用户w的可用dai增加
+        dai[w] = add(dai[w], dtab);
 
         urns[i][u] = urn;
-        ilks[i]    = ilk;
+        ilks[i] = ilk;
     }
+
     // --- CDP Fungibility ---
-    function fork(bytes32 ilk, address src, address dst, int dink, int dart) external {
+    function fork(
+        bytes32 ilk,
+        address src,
+        address dst,
+        int256 dink,
+        int256 dart
+    ) external {
         Urn storage u = urns[ilk][src];
         Urn storage v = urns[ilk][dst];
         Ilk storage i = ilks[ilk];
@@ -189,11 +276,14 @@ contract Vat {
         v.ink = add(v.ink, dink);
         v.art = add(v.art, dart);
 
-        uint utab = mul(u.art, i.rate);
-        uint vtab = mul(v.art, i.rate);
+        uint256 utab = mul(u.art, i.rate);
+        uint256 vtab = mul(v.art, i.rate);
 
         // both sides consent
-        require(both(wish(src, msg.sender), wish(dst, msg.sender)), "Vat/not-allowed");
+        require(
+            both(wish(src, msg.sender), wish(dst, msg.sender)),
+            "Vat/not-allowed"
+        );
 
         // both sides safe
         require(utab <= mul(u.ink, i.spot), "Vat/not-safe-src");
@@ -203,44 +293,70 @@ contract Vat {
         require(either(utab >= i.dust, u.art == 0), "Vat/dust-src");
         require(either(vtab >= i.dust, v.art == 0), "Vat/dust-dst");
     }
-    // --- CDP Confiscation ---
-    function grab(bytes32 i, address u, address v, address w, int dink, int dart) external auth {
-        Urn storage urn = urns[i][u];
-        Ilk storage ilk = ilks[i];
 
+    // --- CDP Confiscation ---
+    //清算一个vault
+    function grab(
+        bytes32 i,
+        address u,
+        address v,
+        address w,
+        int256 dink,
+        int256 dart
+    ) external auth {
+        //dink<0 dart<0
+        //u的债务情况
+        Urn storage urn = urns[i][u];
+        //这个抵押资产的总的概况
+        Ilk storage ilk = ilks[i];
+        //锁定的抵押品减少，债务减少
         urn.ink = add(urn.ink, dink);
         urn.art = add(urn.art, dart);
         ilk.Art = add(ilk.Art, dart);
 
-        int dtab = mul(ilk.rate, dart);
+        int256 dtab = mul(ilk.rate, dart);
 
         gem[i][v] = sub(gem[i][v], dink);
-        sin[w]    = sub(sin[w],    dtab);
-        vice      = sub(vice,      dtab);
+        //w的系统债务增加
+        sin[w] = sub(sin[w], dtab);
+        //总的系统债务增加
+        vice = sub(vice, dtab);
     }
 
     // --- Settlement ---
-    function heal(uint rad) external {
+    //抵消自己未使用领取的vat.dai与system debt
+    function heal(uint256 rad) external {
         address u = msg.sender;
         sin[u] = sub(sin[u], rad);
         dai[u] = sub(dai[u], rad);
-        vice   = sub(vice,   rad);
-        debt   = sub(debt,   rad);
+        vice = sub(vice, rad);
+        debt = sub(debt, rad);
     }
-    function suck(address u, address v, uint rad) external auth {
+
+    //管理员无成本增加system debt，并生成vat.dai
+    function suck(
+        address u,
+        address v,
+        uint256 rad
+    ) external auth {
         sin[u] = add(sin[u], rad);
         dai[v] = add(dai[v], rad);
-        vice   = add(vice,   rad);
-        debt   = add(debt,   rad);
+        vice = add(vice, rad);
+        debt = add(debt, rad);
     }
 
     // --- Rates ---
-    function fold(bytes32 i, address u, int rate) external auth {
+    //管理员增加稳定币的费率
+    function fold(
+        bytes32 i,
+        address u,
+        int256 rate //增加或减少的费率
+    ) external auth {
         require(live == 1, "Vat/not-live");
         Ilk storage ilk = ilks[i];
         ilk.rate = add(ilk.rate, rate);
-        int rad  = mul(ilk.Art, rate);
-        dai[u]   = add(dai[u], rad);
-        debt     = add(debt,   rad);
+        int256 rad = mul(ilk.Art, rate);
+        dai[u] = add(dai[u], rad);
+        debt = add(debt, rad);
     }
 }

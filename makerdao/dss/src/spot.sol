@@ -22,7 +22,11 @@ pragma solidity >=0.5.12;
 // New deployments of this contract will need to include custom events (TO DO).
 
 interface VatLike {
-    function file(bytes32, bytes32, uint) external;
+    function file(
+        bytes32,
+        bytes32,
+        uint256
+    ) external;
 }
 
 interface PipLike {
@@ -31,32 +35,40 @@ interface PipLike {
 
 contract Spotter {
     // --- Auth ---
-    mapping (address => uint) public wards;
-    function rely(address guy) external auth { wards[guy] = 1;  }
-    function deny(address guy) external auth { wards[guy] = 0; }
-    modifier auth {
+    mapping(address => uint256) public wards;
+
+    function rely(address guy) external auth {
+        wards[guy] = 1;
+    }
+
+    function deny(address guy) external auth {
+        wards[guy] = 0;
+    }
+
+    modifier auth() {
         require(wards[msg.sender] == 1, "Spotter/not-authorized");
         _;
     }
 
     // --- Data ---
     struct Ilk {
-        PipLike pip;  // Price Feed
-        uint256 mat;  // Liquidation ratio [ray]
+        PipLike pip; // 调用价格预言机的合约
+        uint256 mat; // 清算比例 e.g.180%
     }
 
-    mapping (bytes32 => Ilk) public ilks;
+    mapping(bytes32 => Ilk) public ilks;
 
-    VatLike public vat;  // CDP Engine
-    uint256 public par;  // ref per dai [ray]
+    VatLike public vat; // CDP Engine
+    //1个dai多少美元,精度为ray
+    uint256 public par; // ref per dai [ray]
 
     uint256 public live;
 
     // --- Events ---
     event Poke(
-      bytes32 ilk,
-      bytes32 val,  // [wad]
-      uint256 spot  // [ray]
+        bytes32 ilk,
+        bytes32 val, // [wad]
+        uint256 spot // [ray]
     );
 
     // --- Init ---
@@ -68,27 +80,39 @@ contract Spotter {
     }
 
     // --- Math ---
-    uint constant ONE = 10 ** 27;
+    uint256 constant ONE = 10**27;
 
-    function mul(uint x, uint y) internal pure returns (uint z) {
+    function mul(uint256 x, uint256 y) internal pure returns (uint256 z) {
         require(y == 0 || (z = x * y) / y == x);
     }
-    function rdiv(uint x, uint y) internal pure returns (uint z) {
+
+    //保留精度
+    function rdiv(uint256 x, uint256 y) internal pure returns (uint256 z) {
         z = mul(x, ONE) / y;
     }
 
     // --- Administration ---
-    function file(bytes32 ilk, bytes32 what, address pip_) external auth {
+    function file(
+        bytes32 ilk,
+        bytes32 what,
+        address pip_
+    ) external auth {
         require(live == 1, "Spotter/not-live");
         if (what == "pip") ilks[ilk].pip = PipLike(pip_);
         else revert("Spotter/file-unrecognized-param");
     }
-    function file(bytes32 what, uint data) external auth {
+
+    function file(bytes32 what, uint256 data) external auth {
         require(live == 1, "Spotter/not-live");
         if (what == "par") par = data;
         else revert("Spotter/file-unrecognized-param");
     }
-    function file(bytes32 ilk, bytes32 what, uint data) external auth {
+
+    function file(
+        bytes32 ilk,
+        bytes32 what,
+        uint256 data
+    ) external auth {
         require(live == 1, "Spotter/not-live");
         if (what == "mat") ilks[ilk].mat = data;
         else revert("Spotter/file-unrecognized-param");
@@ -96,8 +120,15 @@ contract Spotter {
 
     // --- Update value ---
     function poke(bytes32 ilk) external {
+        //has代表oracle是否损坏
+        //val代表抵押资产的价格
         (bytes32 val, bool has) = ilks[ilk].pip.peek();
-        uint256 spot = has ? rdiv(rdiv(mul(uint(val), 10 ** 9), par), ilks[ilk].mat) : 0;
+        //rdiv(mul(uint256(val), 10**9), par)代表每单位抵押资产值多少dai
+        //再rdiv mat,即得每单位抵押资产最多借多少dai
+        uint256 spot = has
+            ? rdiv(rdiv(mul(uint256(val), 10**9), par), ilks[ilk].mat)
+            : 0;
+        //更新该资产的每单位抵押资产最多借多少dai
         vat.file(ilk, "spot", spot);
         emit Poke(ilk, val, spot);
     }
