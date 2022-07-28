@@ -203,11 +203,12 @@ contract Vat {
     function frob(
         bytes32 i, //抵押资产类型
         address u, //user
-        address v, //抵押物的来源地址(dink为负值则需要approve)
-        address w, //借出还入dai的地址
-        int256 dink, //抵押资产的改变量 >0是增加抵押量,gem余额减少，但用户lock的抵押品增加
-        int256 dart //dai的改变量 >0是增加债务
+        address v, //抵押物的来源地址(dink为正值则需要approve)
+        address w, //借出/还入dai的地址
+        int256 dink, //u抵押资产lock的改变量 >0是增加抵押量,gem余额减少，但用户lock的抵押品增加
+        int256 dart //u dai的改变量 >0是增加债务
     ) external {
+        //dart不是时机借出/还入的量
         // system is live
         require(live == 1, "Vat/not-live");
 
@@ -298,11 +299,11 @@ contract Vat {
     //清算一个vault
     function grab(
         bytes32 i,
-        address u,
-        address v,
-        address w,
-        int256 dink,
-        int256 dart
+        address u, //被清算的用户
+        address v, //清算受益者，抵押品接收者
+        address w, //拍卖债务的承担者
+        int256 dink, //将要拍卖的锁定的抵押品
+        int256 dart //债务
     ) external auth {
         //dink<0 dart<0
         //u的债务情况
@@ -324,7 +325,7 @@ contract Vat {
     }
 
     // --- Settlement ---
-    //抵消自己未使用领取的vat.dai与system debt
+    //抵消自己未使用领取的vat.dai与自己的system debt
     function heal(uint256 rad) external {
         address u = msg.sender;
         sin[u] = sub(sin[u], rad);
@@ -346,7 +347,7 @@ contract Vat {
     }
 
     // --- Rates ---
-    //管理员增加稳定币的费率
+    //有jug合约调用，1.更新ilk的rate累积值，增加vow的盈余，增加总债务
     function fold(
         bytes32 i,
         address u,
