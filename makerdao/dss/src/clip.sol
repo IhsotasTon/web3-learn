@@ -97,33 +97,32 @@ contract Clipper {
         require(wards[msg.sender] == 1, "Clipper/not-authorized");
         _;
     }
-
     // --- Data ---
-    bytes32 public immutable ilk; // Collateral type of this Clipper
+    bytes32 public immutable ilk; // 关于这个clip的抵押物类型
     VatLike public immutable vat; // Core CDP Engine
 
     DogLike public dog; // Liquidation module
-    address public vow; // Recipient of dai raised in auctions
-    SpotterLike public spotter; // Collateral price module
-    AbacusLike public calc; // Current price calculator
+    address public vow; // 系统盈余与亏损模块，这里用来接受拍卖获得的dai
+    SpotterLike public spotter; // 价格获取
+    AbacusLike public calc; // 价格计算器
 
-    uint256 public buf; // Multiplicative factor to increase starting price                  [ray]
-    uint256 public tail; // Time elapsed before auction reset                                 [seconds]
-    uint256 public cusp; // Percentage drop before auction reset                              [ray]
-    uint64 public chip; // Percentage of tab to suck from vow to incentivize keepers         [wad]
-    uint192 public tip; // Flat fee to suck from vow to incentivize keepers                  [rad]
-    uint256 public chost; // Cache the ilk dust times the ilk chop to prevent excessive SLOADs [rad]
+    uint256 public buf; // 多种乘数因子，用来提高初始拍卖价格                  [ray]
+    uint256 public tail; // 拍卖可持续的最大时间                                 [seconds]
+    uint256 public cusp; // 价格最低可下降的百分比                              [ray]
+    uint64 public chip; // 可从vow提取相对于tab的百分比dai用来激励keeper bike->kick      [wad]
+    uint192 public tip; // 固定费用 to suck from vow to incentivize keepers   bike->kick               [rad]
+    uint256 public chost; // Cache ilk dust*ilk chop to prevent excessive SLOADs [rad]
 
-    uint256 public kicks; // Total auctions
+    uint256 public kicks; // 总共auction的数量，一直增加
     uint256[] public active; // Array of active auction ids
-
+    //注意sale和kicks的id是一只增加的不会减少，当一个sale被完成时，把sale置为0
     struct Sale {
-        uint256 pos; // Index in active array
-        uint256 tab; // Dai to raise       [rad]
-        uint256 lot; // collateral to sell [wad]
-        address usr; // Liquidated CDP
+        uint256 pos; // 在active array中的索引
+        uint256 tab; // 需要拍卖获得的dai       [rad]
+        uint256 lot; // 准备拍卖的抵押物量 [wad]
+        address usr; // 被清算的用户
         uint96 tic; // Auction start time
-        uint256 top; // Starting price     [ray]
+        uint256 top; // 初始价格     [ray]
     }
     mapping(uint256 => Sale) public sales;
 
@@ -303,14 +302,16 @@ contract Clipper {
         sales[id].tab = tab;
         sales[id].lot = lot;
         sales[id].usr = usr;
+        //开始时间为当前时间
         sales[id].tic = uint96(block.timestamp);
 
         uint256 top;
+        //根据乘数获取初始价格
         top = rmul(getFeedPrice(), buf);
         require(top > 0, "Clipper/zero-top-price");
         sales[id].top = top;
 
-        // incentive to kick auction
+        // 激励keepers去发现并bark,kick一个抵押不足的vault
         uint256 _tip = tip;
         uint256 _chip = chip;
         uint256 coin;
@@ -383,10 +384,10 @@ contract Clipper {
     // collateral can only be purchased entirely, or not at all.
     function take(
         uint256 id, // Auction id
-        uint256 amt, // Upper limit on amount of collateral to buy  [wad]
-        uint256 max, // Maximum acceptable price (DAI / collateral) [ray]
-        address who, // Receiver of collateral and external call address
-        bytes calldata data // Data to pass in external call; if length 0, no call is done
+        uint256 amt, // 最大购买的拍卖品量
+        uint256 max, // 最大可接受的price(DAI / collateral) [ray]
+        address who, // 抵押品的接受者或闪电贷等外部合约的地址
+        bytes calldata data // 需要call 闪电贷的方法
     ) external lock isStopped(3) {
         address usr = sales[id].usr;
         uint96 tic = sales[id].tic;
@@ -397,8 +398,7 @@ contract Clipper {
         {
             bool done;
             (done, price) = status(tic, sales[id].top);
-
-            // Check that auction doesn't need reset
+            // 保证拍卖不需要被reset
             require(!done, "Clipper/needs-reset");
         }
 
@@ -410,22 +410,23 @@ contract Clipper {
         uint256 owe;
 
         {
-            // Purchase as much as possible, up to amt
+            // 最多lot最少amt
             uint256 slice = min(lot, amt); // slice <= lot
 
-            // DAI needed to buy a slice of this sale
+            // 购买者需要拥有的dai
             owe = mul(slice, price);
 
-            // Don't collect more than tab of DAI
+            //如果购买者需要拥有的dai>拍卖需要获得的dai量则将own变为拍卖获得的dai
             if (owe > tab) {
                 // Total debt will be paid
                 owe = tab; // owe' <= owe
-                // Adjust slice
+                // 调整购买的抵押物量
                 slice = owe / price; // slice' = owe' / price <= owe / price == slice <= lot
             } else if (owe < tab && slice < lot) {
                 // If slice == lot => auction completed => dust doesn't matter
                 uint256 _chost = chost;
                 if (tab - owe < _chost) {
+                    //如果剩余的小于最低债务量,则需要将owe减少到剩余_chost,防止剩余的无法拍卖
                     // safe as owe < tab
                     // If tab <= chost, buyers have to take the entire lot.
                     require(tab > _chost, "Clipper/no-partial-purchase");
@@ -436,17 +437,15 @@ contract Clipper {
                 }
             }
 
-            // Calculate remaining tab after operation
+            // 计算剩余的tab
             tab = tab - owe; // safe since owe <= tab
-            // Calculate remaining lot after operation
+            // 计算剩余未拍卖的抵押物
             lot = lot - slice;
 
-            // Send collateral to who
+            // 将抵押物发送给who
             vat.flux(ilk, address(this), who, slice);
 
-            // Do external call (if data is defined) but to be
-            // extremely careful we don't allow to do it to the two
-            // contracts which the Clipper needs to be authorized
+            //call外部合约，以实现闪电贷的功能
             DogLike dog_ = dog;
             if (
                 data.length > 0 && who != address(vat) && who != address(dog_)
@@ -454,19 +453,22 @@ contract Clipper {
                 ClipperCallee(who).clipperCall(msg.sender, owe, slice, data);
             }
 
-            // Get DAI from caller
+            // 从msg.sender获取dai
             vat.move(msg.sender, vow, owe);
 
-            // Removes Dai out for liquidation from accumulator
+            // 更新dog的全局和局部dirt
             dog_.digs(ilk, lot == 0 ? tab + owe : owe);
         }
 
         if (lot == 0) {
+            //如果抵押物全部拍卖完了，则remove sale
             _remove(id);
         } else if (tab == 0) {
+            //如果债务还完了，则返回抵押物给被清算的用户
             vat.flux(ilk, address(this), usr, lot);
             _remove(id);
         } else {
+            //否则更新sale信息
             sales[id].tab = tab;
             sales[id].lot = lot;
         }
@@ -477,6 +479,8 @@ contract Clipper {
     function _remove(uint256 id) internal {
         uint256 _move = active[active.length - 1];
         if (id != _move) {
+            //如果active最后一个元素的值不是该sale的值，则找出该sale的值，然后把最后一个元素的赋给要删除的sale的值
+            //然后将被替换的sale的pos改为新的index，并pop active array
             uint256 _index = sales[id].pos;
             active[_index] = _move;
             sales[_move].pos = _index;
