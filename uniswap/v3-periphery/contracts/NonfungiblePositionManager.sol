@@ -163,7 +163,8 @@ contract NonfungiblePositionManager is
             address(pool),
             PoolAddress.PoolKey({token0: params.token0, token1: params.token1, fee: params.fee})
         );
-
+        //这里的feeGrowthInside0LastX128保证了，相同position或单个tick相同的position的手续费可以被正确计算，如果添加了相同的上下tick，
+        //则算一遍手续费，然后把你这个用户的初始feeGrowthInside0LastX128设置为最新的累积值，单个相同tick时类似的处理方式
         _positions[tokenId] = Position({
             nonce: 0,
             operator: address(0),
